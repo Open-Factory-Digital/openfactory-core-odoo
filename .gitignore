@@ -1,0 +1,4 @@
+# an install made inside the checkout by mistake
+/openfactory-odoo/
+__pycache__/
+*.pyc
