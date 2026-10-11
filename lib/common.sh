@@ -57,7 +57,7 @@ of_compose() {
     # by path — and nothing here should care where the install lives.
     cat "$OF_ODOO_DIR/docker/compose.yaml" |
         OF_ODOO_IMAGE=$OF_ODOO_IMAGE OF_ODOO_HTTP_PORT=$OF_ODOO_HTTP_PORT \
-        OF_ODOO_SRC_MOUNT=$(of_src_mount) \
+        OF_ODOO_SRC_MOUNT=$(of_src_mount) OF_ODOO_EXTRA_ADDONS=${OF_ODOO_EXTRA_ADDONS:-} \
         docker compose -p "$OF_ODOO_COMPOSE_PROJECT" -f - "$@"
 }
 

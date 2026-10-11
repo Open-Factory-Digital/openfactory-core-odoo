@@ -230,7 +230,8 @@ else
     t0=$(date +%s)
     # Shallow and single-branch: the whole history is ~4 GB; one branch at depth 1 is enough to
     # branch from, and the local forge clones/worktrees from it (README: measured).
-    run git -c advice.detachedHead=false clone --depth 1 --single-branch --branch "$ODOO_VERSION" "$CLONE_FROM" "$SRC"
+    [ "$DRY" = yes ] || echo "  cloning (one branch, depth 1: ~250 MB to fetch, ~1.4 GB checked out)..."
+    run git -c advice.detachedHead=false clone -q --depth 1 --single-branch --branch "$ODOO_VERSION" "$CLONE_FROM" "$SRC"
     if [ "$DRY" = no ]; then
         t1=$(date +%s)
         echo "  cloned in $((t1 - t0))s, $(du -sh "$SRC" | cut -f1) on disk"

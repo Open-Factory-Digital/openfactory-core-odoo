@@ -114,7 +114,7 @@ EOF
     fi
     set +e
     if [ "$mode" = mount ]; then
-        docker run --rm --network "$net" -v "$WT:/opt/odoo/src:ro" \
+        docker run --rm --network "$net" -e OF_ODOO_EXTRA_ADDONS="${OF_ODOO_EXTRA_ADDONS:-}" -v "$WT:/opt/odoo/src:ro" \
             --entrypoint /usr/local/bin/of-odoo-test "$OF_ODOO_IMAGE" "$db" "$mods" none
         rc=$?
     else
@@ -150,7 +150,7 @@ EOF
             for d in $MOD_DIRS; do [ -d "$d" ] && dirs="$dirs $d"; done
             # shellcheck disable=SC2086
             tar -cf - $dirs -C "$tmp" .of-deleted
-        fi | docker run -i --rm --network "$net" -v "${OF_ODOO_COMPOSE_PROJECT}_src:/opt/odoo/src:ro" \
+        fi | docker run -i --rm --network "$net" -e OF_ODOO_EXTRA_ADDONS="${OF_ODOO_EXTRA_ADDONS:-}" -v "${OF_ODOO_COMPOSE_PROJECT}_src:/opt/odoo/src:ro" \
                 --entrypoint /usr/local/bin/of-odoo-test "$OF_ODOO_IMAGE" "$db" "$mods" "$how"
         rc=$?
     fi
