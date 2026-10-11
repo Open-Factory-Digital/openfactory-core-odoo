@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck --version | head -2
+          shellcheck -s sh install.sh bin/of-odoo lib/*.sh docker/of-odoo-run docker/of-odoo-test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: python helpers compile
+        run: python -m py_compile lib/*.py
+      - name: lint helper flags a broken module
+        run: |
+          set -eu
+          d=$(mktemp -d) && mkdir -p "$d/custom_addons/x_bad"
+          printf "{'name': 'Bad', 'version': '19.0.1.0.0', 'license': 'LGPL-3'}\n" > "$d/custom_addons/x_bad/__manifest__.py"
+          printf 'def broken(:\n' > "$d/custom_addons/x_bad/models.py"
+          cd "$d"
+          if printf 'custom_addons/x_bad/__manifest__.py\ncustom_addons/x_bad/models.py\n' \
+               | python "$GITHUB_WORKSPACE/lib/odoo_lint.py" 19.0; then
+            echo "lint should have failed"; exit 1
+          fi
+      - name: install --dry-run (local forge)
+        run: ./install.sh --dir "$RUNNER_TEMP/of-odoo" --dry-run
+      - name: install --dry-run (github forge)
+        run: ./install.sh --dir "$RUNNER_TEMP/of-odoo-gh" --dry-run --forge github --github-owner example-org --odoo-version 18.0
+      - name: dry-run wrote nothing
+        run: test ! -e "$RUNNER_TEMP/of-odoo" && test ! -e "$RUNNER_TEMP/of-odoo-gh"
