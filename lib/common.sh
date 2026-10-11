@@ -41,6 +41,8 @@ of_platform_env() {
     export TEMPORAL_UI_URL="http://127.0.0.1:$OF_TEMPORAL_UI_PORT"
     export OPENFACTORY_PANEL_URL="http://127.0.0.1:$OF_PANEL_PORT"
     export OPENFACTORY_GUIDELINES_DIR="$OF_ODOO_DIR/guidelines"
+    # job journals inside the install, not beside each fork's checkout (core's unset default)
+    export OPENFACTORY_LOG_DIR="${OPENFACTORY_LOG_DIR:-$OF_ODOO_DIR/home/.openfactory/logs}"
     export OF_ODOO_DIR
     PATH="$OF_ODOO_DIR/core/.venv/bin:$OF_ODOO_DIR/bin:$PATH"
     export PATH

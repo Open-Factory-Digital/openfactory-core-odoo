@@ -145,7 +145,8 @@ The checkout reaches the container one of two ways, chosen by probing at registe
   to `of-odoo up` in this mode; commit, then `of-odoo restart`.
 
 The factory's job box on this door is core's `worktree` box (no container): `setup`/`validate`
-run on the host in a worktree of the fork, and it is the scripts that reach into Docker.
+run on the host in a worktree of the fork, and it is the scripts that reach into Docker. `setup`
+starts the project's Postgres and leaves it running for the next job; `of-odoo down` stops it.
 
 ## Commands
 

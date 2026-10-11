@@ -23,6 +23,11 @@ of-odoo up -p acme                           # Odoo 17 on the next free port (80
 The Odoo series is read from `odoo/release.py`, so the dev image (`FROM odoo:<series>`) and the
 manifest's version convention match the fork. `--base` defaults to the checkout's current branch.
 
+**One thing is written beside your checkout:** core's worktree box keeps each job's worktree in
+`<parent of the checkout>/.openfactory-worktrees/` (`factory.py`, not configurable in v0.5.0), and
+removes it when the job ends. Job journals go inside the install (`OPENFACTORY_LOG_DIR`, set by
+`of-odoo`).
+
 ## Nothing has to be committed to your fork
 
 By default the project's manifest is **operator-held**: `of-odoo` writes it to

@@ -290,7 +290,7 @@ case $sub in
                 "$OF_ODOO_SRC" "$OF_ODOO_BASE" "$OF_ODOO_SERIES" "$OF_ODOO_HTTP_PORT" "$OF_ODOO_SRC_MODE" )
         done ;;
     env) ( of_platform_env; for v in HOME TEMPORAL_ADDRESS TEMPORAL_UI_URL OPENFACTORY_PANEL_URL \
-            OPENFACTORY_GUIDELINES_DIR OF_ODOO_DIR PATH; do eval "printf \"export %s='%s'\\n\" $v \"\$$v\""; done ) ;;
+            OPENFACTORY_GUIDELINES_DIR OPENFACTORY_LOG_DIR OF_ODOO_DIR PATH; do eval "printf \"export %s='%s'\\n\" $v \"\$$v\""; done ) ;;
     help|-h|--help) usage ;;
     *) usage >&2; exit 2 ;;
 esac
