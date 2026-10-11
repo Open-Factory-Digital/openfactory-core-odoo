@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs the fork's odoo-bin with a computed addons path and the compose database.
+# Addons roots under /opt/odoo/overlay come FIRST (validation's changed modules), then the
+# checkout's own: addons/, odoo/addons/, custom_addons/. A root is used only if it holds a module,
+# because odoo-bin refuses an addons path entry that is not an addons directory.
+set -eu
+src=${OF_ODOO_SRC:-/opt/odoo/src}
+[ -f "$src/odoo-bin" ] || { echo "of-odoo-run: no odoo-bin in $src — is the fork mounted/synced?" >&2; exit 2; }
+ap=""
+for root in /opt/odoo/overlay/custom_addons /opt/odoo/overlay/addons /opt/odoo/overlay/odoo/addons \
+            "$src/custom_addons" "$src/addons" "$src/odoo/addons" ${OF_ODOO_EXTRA_ADDONS:-}; do
+    for m in "$root"/*/__manifest__.py; do
+        if [ -f "$m" ]; then ap="${ap:+$ap,}$root"; fi
+        break
+    done
+done
+exec python3 "$src/odoo-bin" \
+    --db_host="${DB_HOST:-db}" --db_port="${DB_PORT:-5432}" \
+    --db_user="${DB_USER:-odoo}" --db_password="${DB_PASSWORD:-odoo}" \
+    --data-dir=/var/lib/odoo --addons-path="$ap" "$@"

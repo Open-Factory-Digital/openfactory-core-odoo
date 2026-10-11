@@ -1,0 +1,32 @@
+# The Odoo dev environment for one registered fork. Driven by `of-odoo` (docker compose -p
+# <project> -f this file), which sets:
+#   OF_ODOO_IMAGE       the dev image (docker/Dockerfile, FROM odoo:<series>)
+#   OF_ODOO_SRC_MOUNT   the fork's checkout (bind mount) or `src` (the named volume, copy mode)
+#   OF_ODOO_HTTP_PORT   where Odoo answers on this machine (default 8069)
+# Postgres is never published: validation reaches it on this project's network.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 1g
+    restart: unless-stopped
+  odoo:
+    image: ${OF_ODOO_IMAGE:?set by of-odoo}
+    depends_on: [db]
+    command: ["-d", "odoo", "--db-filter", "^odoo$$", "--proxy-mode", "--dev", "xml"]
+    ports:
+      - "127.0.0.1:${OF_ODOO_HTTP_PORT:-8069}:8069"
+    volumes:
+      - ${OF_ODOO_SRC_MOUNT:?set by of-odoo}:/opt/odoo/src
+      - filestore:/var/lib/odoo
+    mem_limit: 2g
+    restart: unless-stopped
+volumes:
+  pgdata:
+  filestore:
+  src:

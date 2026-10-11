@@ -1,0 +1,40 @@
+#!/bin/sh
+# of-odoo-test DB MODULES MODE — inside the dev image: install MODULES into a fresh database DB
+# and run THEIR tests only (--test-tags /mod,...), then exit non-zero on any failure.
+#   MODE none     the checkout at /opt/odoo/src is the tree under test (bind-mounted worktree)
+#   MODE overlay  stdin is a tar of whole module dirs → /opt/odoo/overlay (ahead on addons path)
+#   MODE full     stdin is a tar of changed files → applied over a private copy of the tree
+set -eu
+db=$1 mods=$2 mode=${3:-none}
+case $mode in
+    none) ;;
+    overlay) tar -xf - -C /opt/odoo/overlay ;;
+    full)
+        mkdir -p /tmp/work && cp -a "$OF_ODOO_SRC/." /tmp/work/
+        tar -xf - -C /tmp/work
+        while IFS= read -r f; do [ -n "$f" ] && rm -rf "/tmp/work/$f"; done < /tmp/work/.of-deleted
+        OF_ODOO_SRC=/tmp/work; export OF_ODOO_SRC ;;
+    *) echo "of-odoo-test: unknown mode $mode" >&2; exit 2 ;;
+esac
+tags=$(printf '%s' "$mods" | sed 's#\([^,]*\)#/\1#g')
+log=/tmp/of-odoo-test.log
+set +e
+# shellcheck disable=SC2086  # OF_ODOO_TEST_ARGS is a list of flags
+/usr/local/bin/of-odoo-run -d "$db" -i "$mods" --test-enable --test-tags "$tags" \
+    --stop-after-init --workers=0 --max-cron-threads=0 --http-port=8069 \
+    ${OF_ODOO_TEST_ARGS:-} > "$log" 2>&1
+rc=$?
+set -e
+cat "$log"
+summary=$(grep -E 'odoo\.tests\.result: ' "$log" | tail -n 1 || true)
+errors=$(grep -cE '^[0-9-]+ [0-9:,]+ [0-9]+ (ERROR|CRITICAL) ' "$log" || true)
+echo "----"
+echo "of-odoo-test: modules=$mods exit=$rc error_lines=$errors"
+[ -n "$summary" ] && echo "of-odoo-test: $summary"
+if [ "$rc" -ne 0 ] || [ "$errors" -gt 0 ]; then
+    echo "of-odoo-test: FAILED"; exit 1
+fi
+if printf '%s' "$summary" | grep -qE '[1-9][0-9]* (failed|error)'; then
+    echo "of-odoo-test: FAILED"; exit 1
+fi
+echo "of-odoo-test: passed"
