@@ -1,0 +1,294 @@
+#!/bin/sh
+# of-odoo — run Odoo and the factory that customises it, from one install directory.
+#
+#   of-odoo up|down|restart|logs|ps [-p PROJECT]      the Odoo dev server (Docker)
+#   of-odoo odoo [-p PROJECT] ARGS...                 odoo-bin against the dev database
+#   of-odoo install|update MODULE[,MODULE] [-p P]     install / upgrade modules in the dev database
+#   of-odoo factory up|down|logs|status               the factory (engine, worker, panel), isolated
+#   of-odoo of ARGS...                                any `openfactory` command, isolated
+#   of-odoo doctor|prove [PROJECT]                    openfactory doctor / box prove
+#   of-odoo attach PATH|URL [--name N] [--base B] [--committed]
+#                                                     put an EXISTING Odoo fork on the factory floor
+#   of-odoo register NAME PATH [--base B] [--forge local|github] [--repo OWNER/NAME] [--committed]
+#   of-odoo projects                                  what this install drives
+#   of-odoo env                                       print the isolated environment (for eval)
+set -eu
+
+# Resolve the install dir from this script's own location (bin/ is inside it).
+_self=$0
+while [ -L "$_self" ]; do
+    _link=$(readlink "$_self")
+    case $_link in /*) _self=$_link ;; *) _self="$(dirname "$_self")/$_link" ;; esac
+done
+OF_ODOO_DIR=${OF_ODOO_DIR:-$(cd "$(dirname "$_self")/.." && pwd)}
+export OF_ODOO_DIR
+# shellcheck disable=SC1091
+. "$OF_ODOO_DIR/lib/common.sh"
+of_load_config
+
+usage() { sed -n '2,15p' "$OF_ODOO_DIR/bin/of-odoo" | sed 's/^# \{0,1\}//'; }
+
+# -p PROJECT anywhere in the remaining args → OF_ODOO_PROJECT; the rest stays in ARGS.
+parse_project() {
+    _rest=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            -p|--project) OF_ODOO_PROJECT=$2; shift 2 ;;
+            *) _rest="$_rest $(printf '%s' "$1" | sed "s/'/'\\\\''/g; s/^/'/; s/\$/'/")"; shift ;;
+        esac
+    done
+}
+
+odoo_url() { printf 'http://localhost:%s' "$OF_ODOO_HTTP_PORT"; }
+
+ensure_source() {
+    if [ "$OF_ODOO_SRC_MODE" = copy ]; then
+        of_sync_volume "$OF_ODOO_SRC" HEAD
+    fi
+}
+
+dev_db_exists() {
+    of_compose exec -T db psql -U odoo -d postgres -tAc \
+        "select 1 from pg_database where datname='$OF_ODOO_DEV_DB'" 2>/dev/null | grep -q 1
+}
+
+cmd_up() {
+    of_ensure_image
+    ensure_source
+    of_compose up -d db
+    of_wait_db
+    if ! dev_db_exists; then
+        of_say "creating the dev database '$OF_ODOO_DEV_DB' (base, no demo data) — a minute or two..."
+        # demo data is off by default from 19.0 on; older series need it said
+        _nodemo=""; [ "${OF_ODOO_SERIES%%.*}" -ge 19 ] || _nodemo="--without-demo=all"
+        # shellcheck disable=SC2086
+        of_compose run --rm --no-deps odoo -d "$OF_ODOO_DEV_DB" -i base --stop-after-init \
+            --log-level=warn $_nodemo
+    fi
+    of_compose up -d odoo
+    _i=0
+    while :; do
+        _code=$(curl -s -o /dev/null -w '%{http_code}' "$(odoo_url)/web/login" || true)
+        [ "$_code" = 200 ] && break
+        _i=$((_i + 1)); [ $_i -lt 90 ] || { of_compose logs --tail 40 odoo; of_die "Odoo did not answer 200 at $(odoo_url)/web/login (last: $_code)"; }
+        sleep 2
+    done
+    of_say "Odoo is up: $(odoo_url)  (login admin / admin)"
+}
+
+cmd_odoo() {
+    of_ensure_image
+    ensure_source
+    of_compose up -d db
+    of_wait_db
+    eval "set -- $*"
+    of_compose run --rm --no-deps odoo -d "$OF_ODOO_DEV_DB" "$@"
+}
+
+# ── the factory, isolated ───────────────────────────────────────────────────────────────────
+PIDFILE="$OF_ODOO_DIR/home/.openfactory/of-odoo-up.pid"
+UPLOG="$OF_ODOO_DIR/home/.openfactory/of-odoo-up.log"
+
+factory_pid() {
+    [ -f "$PIDFILE" ] || return 1
+    _pid=$(cat "$PIDFILE")
+    kill -0 "$_pid" 2>/dev/null || return 1
+    printf '%s' "$_pid"
+}
+
+cmd_factory() {
+    _sub=${1:-status}; [ $# -gt 0 ] && shift
+    case $_sub in
+        up)
+            if _pid=$(factory_pid); then of_say "factory already running (pid $_pid)"; return 0; fi
+            mkdir -p "$(dirname "$PIDFILE")"
+            if command -v setsid >/dev/null 2>&1; then _ss=setsid; else _ss=""; fi
+            # shellcheck disable=SC2086
+            ( of_platform_env && cd "$OF_ODOO_DIR" && exec $_ss openfactory up "$@" ) >"$UPLOG" 2>&1 &
+            echo $! > "$PIDFILE"
+            of_say "factory starting (pid $!), log: $UPLOG"
+            of_say "panel: http://127.0.0.1:$OF_PANEL_PORT · engine UI: http://127.0.0.1:$OF_TEMPORAL_UI_PORT"
+            ;;
+        fg) of_platform_env && cd "$OF_ODOO_DIR" && exec openfactory up "$@" ;;
+        down|stop)
+            if _pid=$(factory_pid); then
+                kill -TERM -- "-$_pid" 2>/dev/null || kill -TERM "$_pid" 2>/dev/null || true
+                _i=0
+                while kill -0 "$_pid" 2>/dev/null && [ $_i -lt 20 ]; do sleep 1; _i=$((_i + 1)); done
+                kill -KILL -- "-$_pid" 2>/dev/null || true
+                of_say "factory stopped"
+            else
+                of_say "factory not running"
+            fi
+            rm -f "$PIDFILE"
+            ;;
+        logs) tail -n "${1:-60}" "$UPLOG" ;;
+        status)
+            if _pid=$(factory_pid); then of_say "running (pid $_pid) — panel http://127.0.0.1:$OF_PANEL_PORT"
+            else of_say "not running"; fi
+            ;;
+        *) of_die "factory: up|fg|down|logs|status" ;;
+    esac
+}
+
+# ── registering a fork ──────────────────────────────────────────────────────────────────────
+# The Odoo series a checkout is (from odoo/release.py), e.g. 19.0 — picks the runtime image.
+odoo_series() {
+    "$OF_ODOO_DIR/core/.venv/bin/python" - "$1/odoo/release.py" <<'PY'
+import re, sys
+src = open(sys.argv[1]).read()
+m = re.search(r"version_info\s*=\s*\(\s*(?:'saas~)?(\d+)", src)
+print(f"{m.group(1)}.0" if m else "")
+PY
+}
+
+cmd_register() {
+    [ $# -ge 2 ] || of_die "usage: of-odoo register NAME PATH [--base B] [--forge local|github] [--repo OWNER/NAME] [--committed] [--http-port N]"
+    _name=$1 _path=$2; shift 2
+    _base="" _forge=local _repo="" _committed=no _port=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --base) _base=$2; shift 2 ;;
+            --forge) _forge=$2; shift 2 ;;
+            --repo) _repo=$2; shift 2 ;;
+            --committed) _committed=yes; shift ;;
+            --http-port) _port=$2; shift 2 ;;
+            *) of_die "register: unknown option $1" ;;
+        esac
+    done
+    case $_name in *[!a-z0-9-]*|'') of_die "project name must be lowercase letters, digits and '-'" ;; esac
+    _path=$(cd "$_path" && pwd)
+    [ -f "$_path/odoo-bin" ] || of_die "$_path has no odoo-bin — not an Odoo Community checkout"
+    _base=${_base:-$(git -C "$_path" rev-parse --abbrev-ref HEAD)}
+    git -C "$_path" rev-parse --verify -q "refs/heads/$_base" >/dev/null \
+        || of_die "branch '$_base' does not exist in $_path (the factory branches from it)"
+    _series=$(odoo_series "$_path")
+    [ -n "$_series" ] || of_die "cannot read the Odoo version from $_path/odoo/release.py"
+    _image=${OF_ODOO_IMAGE:-of-odoo-dev:$_series}
+    _sum=$(printf '%s' "$OF_ODOO_DIR" | cksum | cut -d' ' -f1)
+    _compose="ofodoo-$_name-$_sum"
+    # an existing project keeps its port; a new one takes the default + its index
+    if [ -z "$_port" ] && [ -f "$OF_ODOO_DIR/projects/$_name.env" ]; then
+        _port=$(sed -n "s/^OF_ODOO_HTTP_PORT=//p" "$OF_ODOO_DIR/projects/$_name.env")
+    fi
+    if [ -z "$_port" ]; then
+        _n=$(find "$OF_ODOO_DIR/projects" -name '*.env' 2>/dev/null | wc -l)
+        _port=$(( ${OF_ODOO_HTTP_PORT:-$OF_ODOO_HTTP_PORT_DEFAULT} + _n ))
+    fi
+    _mode=${OF_ODOO_SRC_MODE:-}
+    if [ -z "$_mode" ]; then
+        _mode=mount
+        if command -v docker >/dev/null 2>&1; then
+            OF_ODOO_COMPOSE_PROJECT=$_compose
+            docker image inspect "$_image" >/dev/null 2>&1 || of_build_image "$_series" "$_image"
+            of_daemon_sees "$_path" "$_image" || _mode=copy
+        fi
+    fi
+    mkdir -p "$OF_ODOO_DIR/projects" "$OF_ODOO_DIR/manifests"
+    cat > "$OF_ODOO_DIR/projects/$_name.env" <<EOF
+# of-odoo project '$_name' — written by 'of-odoo register'
+OF_ODOO_SRC='$_path'
+OF_ODOO_BASE='$_base'
+OF_ODOO_SERIES='$_series'
+OF_ODOO_IMAGE='$_image'
+OF_ODOO_SRC_MODE='$_mode'
+OF_ODOO_HTTP_PORT=$_port
+OF_ODOO_COMPOSE_PROJECT='$_compose'
+OF_ODOO_DEV_DB='odoo'
+OF_ODOO_FORGE='$_forge'
+EOF
+    _manifest="$OF_ODOO_DIR/manifests/$_name.yaml"
+    sed -e "s|@BASE@|$_base|g" -e "s|@PROJECT@|$_name|g" -e "s|@OF_ODOO_DIR@|$OF_ODOO_DIR|g" \
+        "$OF_ODOO_DIR/templates/project.yaml.tmpl" > "$_manifest"
+    if [ "$_committed" = yes ]; then
+        # Committed: nothing install-specific in it — `of-odoo` is on the factory's PATH.
+        mkdir -p "$_path/.openfactory"
+        sed -e "s|sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' \([a-z]*\) @PROJECT@|of-odoo validate \1 -p @PROJECT@|" \
+            -e "s|@BASE@|$_base|g" -e "s|@PROJECT@|$_name|g" \
+            "$OF_ODOO_DIR/templates/project.yaml.tmpl" > "$_path/.openfactory/project.yaml"
+        _manifest=""
+        of_say "wrote $_path/.openfactory/project.yaml — commit it on '$_base':"
+        of_say "  git -C '$_path' add .openfactory/project.yaml && git -C '$_path' commit -m 'Add OpenFactory manifest'"
+    fi
+    ( of_platform_env && "$OF_ODOO_DIR/core/.venv/bin/python" "$OF_ODOO_DIR/lib/register.py" \
+        "$_name" "$_path" "$_forge" "${_repo:-$_name}" "$_manifest" )
+    # core's own converging step: the local board's columns and the product role's context
+    # repository (both inside the isolated home). The manifest exists, so it is not scaffolded.
+    of_openfactory project init "$_name" | grep -E '^(✓|✗)' || true
+    of_say "project '$_name': $_path @ $_base (Odoo $_series, $_mode mode, http :$_port)"
+}
+
+cmd_attach() {
+    [ $# -ge 1 ] || of_die "usage: of-odoo attach PATH|URL [--name N] [--base B] [--committed]"
+    _src=$1; shift
+    _name="" _base="" _extra=""
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --name) _name=$2; shift 2 ;;
+            --base) _base=$2; shift 2 ;;
+            --committed) _extra="$_extra --committed"; shift ;;
+            --http-port) _extra="$_extra --http-port $2"; shift 2 ;;
+            *) of_die "attach: unknown option $1" ;;
+        esac
+    done
+    case $_src in
+        https://*|git@*|ssh://*)
+            _slug=$(printf '%s' "$_src" | sed -E 's#(\.git)?/*$##; s#^.*[:/]([^/:]+/[^/]+)$#\1#')
+            _name=${_name:-$(printf '%s' "$_slug" | tr '/A-Z_.' '-a-z--')}
+            _dest="$OF_ODOO_DIR/forks/$_name"
+            if [ ! -d "$_dest/.git" ]; then
+                [ -n "$_base" ] || of_die "attach URL: pass --base <branch> (e.g. --base 19.0)"
+                mkdir -p "$OF_ODOO_DIR/forks"
+                git clone --depth 1 --single-branch --branch "$_base" "$_src" "$_dest"
+            fi
+            _forge=local _repo=""
+            case $_src in
+                *github.com[:/]*) _forge=github _repo=$_slug ;;
+            esac
+            # shellcheck disable=SC2086
+            cmd_register "$_name" "$_dest" ${_base:+--base "$_base"} --forge "$_forge" ${_repo:+--repo "$_repo"} $_extra
+            ;;
+        *)
+            [ -d "$_src" ] || of_die "attach: $_src is neither a directory nor a clone URL"
+            _name=${_name:-$(basename "$(cd "$_src" && pwd)" | tr 'A-Z_.' 'a-z--')}
+            # shellcheck disable=SC2086
+            cmd_register "$_name" "$_src" ${_base:+--base "$_base"} --forge local $_extra
+            ;;
+    esac
+}
+
+sub=${1:-help}; [ $# -gt 0 ] && shift
+case $sub in
+    up|down|restart|logs|ps|odoo|install|update|doctor|prove|validate)
+        parse_project "$@"; eval "set -- $_rest"
+        of_load_project "${OF_ODOO_PROJECT:-}"
+        case $sub in
+            up) cmd_up ;;
+            down) of_compose down ;;
+            restart) ensure_source; of_compose restart odoo ;;
+            logs) of_compose logs --tail "${1:-80}" odoo ;;
+            ps) of_compose ps ;;
+            odoo) cmd_odoo "$*" ;;
+            install) [ $# -ge 1 ] || of_die "install MODULE"; cmd_odoo "-i $1 --stop-after-init"; of_compose restart odoo ;;
+            update) [ $# -ge 1 ] || of_die "update MODULE"; cmd_odoo "-u $1 --stop-after-init"; of_compose restart odoo ;;
+            doctor) of_openfactory doctor "$OF_ODOO_PROJECT" ;;
+            prove) of_openfactory box prove "$OF_ODOO_PROJECT" ;;
+            validate) sh "$OF_ODOO_DIR/lib/odoo-validate.sh" "${1:-test}" "$OF_ODOO_PROJECT" ;;
+        esac
+        ;;
+    factory) cmd_factory "$@" ;;
+    of|openfactory) of_openfactory "$@" ;;
+    register) cmd_register "$@" ;;
+    attach) cmd_attach "$@" ;;
+    projects)
+        for f in "$OF_ODOO_DIR"/projects/*.env; do
+            [ -f "$f" ] || continue
+            # shellcheck disable=SC1090
+            ( . "$f"; printf '%-16s %s @ %s (Odoo %s, :%s, %s)\n' "$(basename "$f" .env)" \
+                "$OF_ODOO_SRC" "$OF_ODOO_BASE" "$OF_ODOO_SERIES" "$OF_ODOO_HTTP_PORT" "$OF_ODOO_SRC_MODE" )
+        done ;;
+    env) ( of_platform_env; for v in HOME TEMPORAL_ADDRESS TEMPORAL_UI_URL OPENFACTORY_PANEL_URL \
+            OPENFACTORY_GUIDELINES_DIR OF_ODOO_DIR PATH; do eval "printf \"export %s='%s'\\n\" $v \"\$$v\""; done ) ;;
+    help|-h|--help) usage ;;
+    *) usage >&2; exit 2 ;;
+esac
