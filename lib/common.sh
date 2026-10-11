@@ -57,6 +57,7 @@ of_compose() {
     # The file goes through a PIPE for the same reason the build context does: a snap-confined
     # docker CLI cannot open files under /tmp — not even as a redirected stdin, which it reopens
     # by path — and nothing here should care where the install lives.
+    # shellcheck disable=SC2002  # the pipe is the point (above); 0.9 flags it, 0.11 does not
     cat "$OF_ODOO_DIR/docker/compose.yaml" |
         OF_ODOO_IMAGE=$OF_ODOO_IMAGE OF_ODOO_HTTP_PORT=$OF_ODOO_HTTP_PORT \
         OF_ODOO_SRC_MOUNT=$(of_src_mount) OF_ODOO_EXTRA_ADDONS=${OF_ODOO_EXTRA_ADDONS:-} \
