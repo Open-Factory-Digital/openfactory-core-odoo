@@ -1,7 +1,7 @@
 #!/bin/sh
 # of-odoo — run Odoo and the factory that customises it, from one install directory.
 #
-#   of-odoo up|down|restart|logs|ps [-p PROJECT]      the Odoo dev server (Docker)
+#   of-odoo up|down|restart|logs|ps|build [-p PROJECT] the Odoo dev server (Docker)
 #   of-odoo odoo [-p PROJECT] ARGS...                 odoo-bin against the dev database
 #   of-odoo install|update MODULE[,MODULE] [-p P]     install / upgrade modules in the dev database
 #   of-odoo factory up|down|logs|status               the factory (engine, worker, panel), isolated
@@ -62,7 +62,7 @@ cmd_up() {
         # demo data is off by default from 19.0 on; older series need it said
         _nodemo=""; [ "${OF_ODOO_SERIES%%.*}" -ge 19 ] || _nodemo="--without-demo=all"
         # shellcheck disable=SC2086
-        of_compose run --rm --no-deps odoo -d "$OF_ODOO_DEV_DB" -i base --stop-after-init \
+        of_compose run --rm --no-deps -T odoo -d "$OF_ODOO_DEV_DB" -i base --stop-after-init \
             --log-level=warn $_nodemo
     fi
     of_compose up -d odoo
@@ -82,7 +82,7 @@ cmd_odoo() {
     of_compose up -d db
     of_wait_db
     eval "set -- $*"
-    of_compose run --rm --no-deps odoo -d "$OF_ODOO_DEV_DB" "$@"
+    of_compose run --rm --no-deps -T odoo -d "$OF_ODOO_DEV_DB" "$@"
 }
 
 # ── the factory, isolated ───────────────────────────────────────────────────────────────────
@@ -207,8 +207,9 @@ EOF
             -e "s|@BASE@|$_base|g" -e "s|@PROJECT@|$_name|g" \
             "$OF_ODOO_DIR/templates/project.yaml.tmpl" > "$_path/.openfactory/project.yaml"
         _manifest=""
-        of_say "wrote $_path/.openfactory/project.yaml — commit it on '$_base':"
-        of_say "  git -C '$_path' add .openfactory/project.yaml && git -C '$_path' commit -m 'Add OpenFactory manifest'"
+        # -f: Odoo's own .gitignore ignores every dot-directory (`.*`), .openfactory/ included
+        of_say "wrote $_path/.openfactory/project.yaml — commit it on '$_base' (-f: Odoo's .gitignore has '.*'):"
+        of_say "  git -C '$_path' add -f .openfactory/project.yaml && git -C '$_path' commit -m 'Add OpenFactory manifest'"
     fi
     ( of_platform_env && "$OF_ODOO_DIR/core/.venv/bin/python" "$OF_ODOO_DIR/lib/register.py" \
         "$_name" "$_path" "$_forge" "${_repo:-$_name}" "$_manifest" )
@@ -259,11 +260,12 @@ cmd_attach() {
 
 sub=${1:-help}; [ $# -gt 0 ] && shift
 case $sub in
-    up|down|restart|logs|ps|odoo|install|update|doctor|prove|validate)
+    up|down|restart|logs|ps|odoo|install|update|doctor|prove|validate|build)
         parse_project "$@"; eval "set -- $_rest"
         of_load_project "${OF_ODOO_PROJECT:-}"
         case $sub in
             up) cmd_up ;;
+            build) of_build_image "$OF_ODOO_SERIES" "$OF_ODOO_IMAGE" && of_say "built $OF_ODOO_IMAGE" ;;
             down) of_compose down ;;
             restart) ensure_source; of_compose restart odoo ;;
             logs) of_compose logs --tail "${1:-80}" odoo ;;

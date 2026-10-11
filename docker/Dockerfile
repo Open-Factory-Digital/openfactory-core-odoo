@@ -11,7 +11,9 @@ COPY of-odoo-test /usr/local/bin/of-odoo-test
 RUN chmod 0755 /usr/local/bin/of-odoo-run /usr/local/bin/of-odoo-test \
  && mkdir -p /opt/odoo/src /opt/odoo/overlay && chown -R odoo /opt/odoo
 USER odoo
-ENV OF_ODOO_SRC=/opt/odoo/src
+# The base image's /etc/odoo/odoo.conf points at /mnt/extra-addons; this runtime computes its
+# own addons path, so it reads no config file (ODOO_RC names one that does not exist).
+ENV OF_ODOO_SRC=/opt/odoo/src ODOO_RC=/opt/odoo/no-config.conf
 WORKDIR /opt/odoo
 ENTRYPOINT ["/usr/local/bin/of-odoo-run"]
 CMD []

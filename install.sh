@@ -185,6 +185,18 @@ else
     # shellcheck disable=SC2086
     run env HOME="$DIR/home" "$DIR/core/.venv/bin/openfactory" init --runtime local $init_axes \
         --tracker local --harness claude_code --claude-auth subscription --channel panel --panel-local
+    if [ "$FORGE" = github ]; then
+        # forge github signs in with a token: the gh login's, so commits and PRs read as you
+        if [ "$DRY" = yes ]; then
+            echo "  [dry-run] OPENFACTORY_BOT_TOKEN=\$(gh auth token) into $ENVFILE"
+        elif tok=$(gh auth token 2>/dev/null) && [ -n "$tok" ]; then
+            grep -v '^OPENFACTORY_BOT_TOKEN=' "$ENVFILE" > "$ENVFILE.new" || true
+            printf 'OPENFACTORY_BOT_TOKEN=%s\n' "$tok" >> "$ENVFILE.new"
+            chmod 600 "$ENVFILE.new" && mv "$ENVFILE.new" "$ENVFILE"
+        else
+            echo "  ! no gh login — put a token with repo scope in OPENFACTORY_BOT_TOKEN in $ENVFILE"
+        fi
+    fi
     if [ "$DRY" = no ]; then
         # The three listeners on THIS install's ports (of-odoo also exports them, which wins).
         sed -i.bak \

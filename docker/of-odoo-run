@@ -17,4 +17,4 @@ done
 exec python3 "$src/odoo-bin" \
     --db_host="${DB_HOST:-db}" --db_port="${DB_PORT:-5432}" \
     --db_user="${DB_USER:-odoo}" --db_password="${DB_PASSWORD:-odoo}" \
-    --data-dir=/var/lib/odoo --addons-path="$ap" "$@"
+    --data-dir=/var/lib/odoo --addons-path="$ap" --http-interface=0.0.0.0 "$@"

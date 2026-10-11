@@ -85,6 +85,10 @@ of_daemon_sees() {
 of_sync_volume() {
     _repo=$1 _commit=$(git -C "$1" rev-parse "$2^{commit}") || return 1
     _vol="${OF_ODOO_COMPOSE_PROJECT}_src"
+    # created with compose's own labels, so `docker compose` adopts it as the stack's `src`
+    docker volume inspect "$_vol" >/dev/null 2>&1 || docker volume create \
+        --label "com.docker.compose.project=$OF_ODOO_COMPOSE_PROJECT" \
+        --label com.docker.compose.volume=src "$_vol" >/dev/null
     _have=$(docker run --rm -v "$_vol:/src" --entrypoint /bin/sh "$OF_ODOO_IMAGE" -c 'cat /src/.of-commit 2>/dev/null' || true)
     [ "$_have" = "$_commit" ] && return 0
     of_say "syncing $(git -C "$_repo" rev-parse --short "$_commit") into volume $_vol (copy mode)..."

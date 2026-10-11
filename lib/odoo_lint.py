@@ -54,10 +54,10 @@ def main(series: str) -> int:
                     header = set(rows[0]) if rows else set()
                     if not ACCESS_HEADER <= header:
                         errors.append(f"{p}: header must include {sorted(ACCESS_HEADER)}")
+        except (ET.ParseError, csv.Error, UnicodeDecodeError) as exc:  # (ParseError is a SyntaxError)
+            errors.append(f"{p}: {exc}")
         except SyntaxError as exc:
             errors.append(f"{p}:{exc.lineno}: {exc.msg}")
-        except (ET.ParseError, csv.Error, UnicodeDecodeError) as exc:
-            errors.append(f"{p}: {exc}")
     for root in sorted(modules):
         check_access_rules(root, errors, warnings)
     for w in warnings:

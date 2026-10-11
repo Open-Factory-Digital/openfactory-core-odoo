@@ -94,6 +94,7 @@ EOF
         of_say "→ also running ${OF_ODOO_FRAMEWORK_TESTS:-base} tests (OF_ODOO_FRAMEWORK_TESTS)"
         mods="${mods:+$mods,}${OF_ODOO_FRAMEWORK_TESTS:-base}"
     fi
+    mods=$(printf '%s' "$mods" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -)
     if [ -z "$mods" ]; then
         of_say "validate: no Odoo addon touched since $(git rev-parse --short "$base") — nothing to test"
         return 0
