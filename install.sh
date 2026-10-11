@@ -153,9 +153,9 @@ if [ ! -f "$DIR/home/.claude.json" ]; then
 fi
 if [ ! -f "$DIR/home/.gitconfig" ]; then
     gname=$(git config --global user.name 2>/dev/null || echo "OpenFactory Odoo")
-    gmail=$(git config --global user.email 2>/dev/null || echo "openfactory@localhost")
+    gemail=$(git config --global user.email 2>/dev/null || echo "openfactory@localhost")
     run git config --file "$DIR/home/.gitconfig" user.name "$gname"
-    run git config --file "$DIR/home/.gitconfig" user.email "$gmail"
+    run git config --file "$DIR/home/.gitconfig" user.email "$gemail"
 fi
 
 if [ "$DRY" = no ]; then
