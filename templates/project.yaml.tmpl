@@ -8,6 +8,11 @@ version: 1
 # The Odoo series branch of your fork (16.0 … 20.0, or your own integration branch).
 base_branch: "@BASE@"
 
+# The product role's context repository (requirements, decisions): the one registration names
+# in the registry (`product.docs_repo`). Declared here too, so the manifest says where the
+# product's requirements live (`doctor`'s product_link notes it otherwise).
+docs_repo: "@PROJECT@-context"
+
 # A person merges. On the local forge, merging fast-forwards your checkout; `of-odoo update
 # <module>` then upgrades the module in the dev database.
 merge_policy: human
@@ -48,7 +53,7 @@ test_inventory: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' inventory @PROJECT@"
 # A change to the ORM/framework is never "normal": it stays human-gated whatever merge_policy says.
 # `stack: odoo` names no shipped preset ON PURPOSE: `stack: python` would add the python preset's
 # `mypy .` and `bandit -r .` over the whole Odoo tree, which no Odoo fork passes (measured: both
-# missing tools on the proof, and neither is a meaningful gate on 48k files of someone else's code).
+# missing tools on the proof, and neither is a meaningful gate on 50k files of someone else's code).
 components:
   custom_addons:
     path: "custom_addons/**"
