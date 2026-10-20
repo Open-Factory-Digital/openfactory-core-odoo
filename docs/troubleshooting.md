@@ -12,15 +12,25 @@ a new proof.
 Alternatively export `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) before
 `of-odoo factory up`.
 
-**The Docker daemon "cannot see" the checkout (copy mode).** Snap-installed Docker cannot read
-`/tmp` or hidden directories, and a remote daemon sees none of your files. Copy mode handles it
-(`of-odoo projects` shows the mode). To use mount mode instead, install under your home directory,
-outside a dot-directory, with a non-snap Docker.
+**The Docker daemon "cannot see" the checkout (copy mode).** A remote daemon sees none of your
+files; if your Docker is the snap package, it cannot read `/tmp` or hidden directories. Copy mode
+handles it (`of-odoo projects` shows the mode). To use mount mode instead, keep the install and
+your forks under your home directory, outside a dot-directory — that works with snap Docker too.
 
-**A docker command exits 1 and prints nothing.** Snap-confined Docker also cannot write to a file
-under `/tmp` it inherits as stdout/stderr, nor read a redirected stdin from there. `of-odoo` pipes
-everything (that is why the compose file and build context go over a pipe); if you redirect its
-output yourself, redirect to a file outside `/tmp` or through `| cat`.
+**A docker command exits 1 and prints nothing.** If your Docker is the snap package, its CLI
+cannot write to a regular file it inherits as stdout/stderr (`write /dev/stdout: bad file
+descriptor`, often swallowed with the rest of the output) — measured with files under `$HOME` as
+well as `/tmp` — nor read a redirected stdin from `/tmp`. `of-odoo` pipes everything (that is why
+the compose file and build context go over a pipe), and the factory reads its gates over pipes;
+if you redirect `of-odoo validate` or `of-odoo up` yourself, go through `| cat` (`… 2>&1 | cat >
+log`), not straight to a file.
+
+**A module does not load on 20.0: `KeyError: 'ir.model.access'`.** Odoo 20.0 replaced
+`ir.model.access` and `ir.rule` with `ir.access`: the module ships `security/ir.model.access.csv`
+from an older series. Rewrite it as `security/ir.access.csv`
+(`id,name,model_id,group_id/id,operation,domain`, `model_id` the model's technical name,
+`operation` e.g. `crud` or `r`) and list that file in the manifest. `of-odoo validate lint`
+reports the old file on 20.0.
 
 **`validate` runs `base` tests and takes long.** The change touched code outside any addon (the
 framework, `odoo-bin`, …). That is what the guidelines tell the agent not to do; if it is intended,
@@ -31,7 +41,7 @@ minute). A stale database from another series: `of-odoo down`, then
 `docker volume rm <compose project>_pgdata` (`of-odoo ps` names the project).
 
 **Updating Odoo from upstream.** The fork is shallow. `git -C <dir>/odoo fetch --depth 500 upstream
-19.0 && git -C <dir>/odoo merge upstream/19.0`; if git reports unrelated histories, deepen more
+20.0 && git -C <dir>/odoo merge upstream/20.0` (your series); if git reports unrelated histories, deepen more
 (`--deepen 2000`) or once `--unshallow` (several GB). Then `of-odoo restart` and update modules.
 
 **Starting over.** `of-odoo factory down`, `of-odoo down` (per project), then delete `<dir>` and

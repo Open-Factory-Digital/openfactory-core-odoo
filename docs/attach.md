@@ -5,7 +5,7 @@
 
 ```bash
 ./install.sh --dir ~/openfactory-odoo        # once: the factory and its tools (also clones a
-                                             # fresh 19.0 fork as project 'odoo'; ignore it or
+                                             # fresh 20.0 fork as project 'odoo'; ignore it or
                                              # `of-odoo of project remove odoo`)
 of-odoo attach ~/src/acme-odoo --name acme --base 17.0
 of-odoo prove -p acme
@@ -24,8 +24,9 @@ The Odoo series is read from `odoo/release.py`, so the dev image (`FROM odoo:<se
 manifest's version convention match the fork. `--base` defaults to the checkout's current branch.
 
 **One thing is written beside your checkout:** core's worktree box keeps each job's worktree in
-`<parent of the checkout>/.openfactory-worktrees/` (`factory.py`, not configurable in v0.5.0), and
-removes it when the job ends. Job journals go inside the install (`OPENFACTORY_LOG_DIR`, set by
+`<parent of the checkout>/.openfactory-worktrees/` (`factory.py`; still not configurable in
+v0.6.0) — for `~/src/acme-odoo` that is `~/src/.openfactory-worktrees/` — and removes it when the
+job ends. Job journals go inside the install (`OPENFACTORY_LOG_DIR`, set by
 `of-odoo`).
 
 ## Nothing has to be committed to your fork
