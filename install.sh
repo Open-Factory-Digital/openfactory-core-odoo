@@ -1,7 +1,7 @@
 #!/bin/sh
 # install.sh — OpenFactory + an Odoo Community fork, ready to customise from the factory floor.
 #
-#   ./install.sh [--dir DIR] [--odoo-version 19.0] [--core-version v0.5.0]
+#   ./install.sh [--dir DIR] [--odoo-version 20.0] [--core-version v0.6.0]
 #                [--forge local|github] [--github-owner OWNER] [--project NAME]
 #                [--odoo-port 8069] [--panel-port 18787] [--engine-port 17233]
 #                [--engine-ui-port 18233] [--no-docker] [--dry-run]
@@ -14,8 +14,8 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 
 DIR="${HOME}/openfactory-odoo"
-ODOO_VERSION=19.0
-CORE_VERSION=v0.5.0
+ODOO_VERSION=20.0
+CORE_VERSION=v0.6.0
 CORE_REPO=${OF_CORE_REPO:-https://github.com/Open-Factory-Digital/openfactory-core.git}
 ODOO_UPSTREAM=${OF_ODOO_UPSTREAM:-https://github.com/odoo/odoo.git}
 FORGE=local
@@ -66,7 +66,7 @@ run() {
 }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# ── 0. what this machine has ─────────────────────────────────────────────────────────────────
+# ── 0. prerequisites ─────────────────────────────────────────────────────────────────────────
 step "checking prerequisites"
 missing=""
 have git || missing="$missing git"

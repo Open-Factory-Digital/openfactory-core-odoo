@@ -2,7 +2,7 @@
 # wkhtmltopdf), running odoo-bin FROM YOUR FORK's checkout, mounted (or synced) at /opt/odoo/src.
 # The odoo package the base image installs is shadowed: odoo-bin puts its own directory first
 # on sys.path, so `import odoo` is the fork's.
-ARG ODOO_VERSION=19.0
+ARG ODOO_VERSION=20.0
 FROM odoo:${ODOO_VERSION}
 
 USER root

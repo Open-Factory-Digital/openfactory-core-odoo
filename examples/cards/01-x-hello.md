@@ -8,7 +8,7 @@ A first custom module, so we can see the factory floor working end to end: a "He
 one model and a menu.
 
 ## Scope
-- New module `custom_addons/x_hello` (Odoo 19.0, version `19.0.1.0.0`, license LGPL-3,
+- New module `custom_addons/x_hello` (Odoo 20.0, version `20.0.1.0.0`, license LGPL-3,
   depends on `base`), installable and an application.
 - Model `x_hello.greeting` with fields `name` (Char, required) and `message` (Text), and a
   computed Char `display_message` = "Hello, <name>!" when `message` is empty, else `message`.

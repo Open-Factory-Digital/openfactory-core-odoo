@@ -2,7 +2,7 @@
 # <project> -f this file), which sets:
 #   OF_ODOO_IMAGE       the dev image (docker/Dockerfile, FROM odoo:<series>)
 #   OF_ODOO_SRC_MOUNT   the fork's checkout (bind mount) or `src` (the named volume, copy mode)
-#   OF_ODOO_HTTP_PORT   where Odoo answers on this machine (default 8069)
+#   OF_ODOO_HTTP_PORT   the host port Odoo answers on (default 8069)
 #   OF_ODOO_EXTRA_ADDONS more addons dirs, relative to the checkout (projects/<name>.env)
 # Postgres is never published: validation reaches it on this project's network.
 services:

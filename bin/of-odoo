@@ -132,7 +132,7 @@ cmd_factory() {
 }
 
 # ── registering a fork ──────────────────────────────────────────────────────────────────────
-# The Odoo series a checkout is (from odoo/release.py), e.g. 19.0 — picks the runtime image.
+# The Odoo series a checkout is (from odoo/release.py), e.g. 20.0 — picks the runtime image.
 odoo_series() {
     "$OF_ODOO_DIR/core/.venv/bin/python" - "$1/odoo/release.py" <<'PY'
 import re, sys
@@ -238,7 +238,7 @@ cmd_attach() {
             _name=${_name:-$(printf '%s' "$_slug" | tr '/A-Z_.' '-a-z--')}
             _dest="$OF_ODOO_DIR/forks/$_name"
             if [ ! -d "$_dest/.git" ]; then
-                [ -n "$_base" ] || of_die "attach URL: pass --base <branch> (e.g. --base 19.0)"
+                [ -n "$_base" ] || of_die "attach URL: pass --base <branch> (e.g. --base 20.0)"
                 mkdir -p "$OF_ODOO_DIR/forks"
                 git clone --depth 1 --single-branch --branch "$_base" "$_src" "$_dest"
             fi
