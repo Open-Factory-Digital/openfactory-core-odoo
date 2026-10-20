@@ -1,7 +1,7 @@
 # Odoo house rules (this deployment's guidelines for the coding agent)
 
 You are customising a fork of **Odoo Community**. The branch you start from is an Odoo series
-branch (e.g. `19.0`). These rules apply to every card unless the card says otherwise.
+branch (e.g. `20.0`). These rules apply to every card unless the card says otherwise.
 
 ## Where code goes
 - **New behaviour goes in a module under `custom_addons/`**, never as an edit to Odoo's own
@@ -14,16 +14,23 @@ branch (e.g. `19.0`). These rules apply to every card unless the card says other
   e.g. `custom_addons/x_hello/`.
 
 ## A module's shape
-- `__init__.py`, `__manifest__.py` with at least `name`, `version`, `summary`, `depends`,
+- `__init__.py`, `__manifest__.py` with at least `name`, `version`, `summary`, `author`, `depends`,
   `data`, `license` (`'LGPL-3'` unless the card says otherwise), `installable: True`, and
   `application: True` only for something with its own top-level menu.
-- **`version` is `<series>.<major>.<minor>.<patch>`**, e.g. `19.0.1.0.0`. Bump it when you change
+- **`version` is `<series>.<major>.<minor>.<patch>`**, e.g. `20.0.1.0.0`. Bump it when you change
   data files or models of an existing module, so `-u` upgrades it.
 - Models in `models/`, views in `views/` (one file per model), security in `security/`, data in
   `data/`, wizards in `wizard/`, controllers in `controllers/`, tests in `tests/`.
-- **Every new model needs access rules**: `security/ir.model.access.csv` listed in the manifest's
-  `data` (before the views), with the header
-  `id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink`.
+- **Every new model needs access rules**, in a CSV listed in the manifest's `data` (before the
+  views). Which file depends on the series:
+  - **20.0 and later**: `security/ir.access.csv` (model `ir.access`, which replaced both
+    `ir.model.access` and `ir.rule`), header `id,name,model_id,group_id/id,operation,domain`.
+    `model_id` is the model's technical name (`x_hello.greeting`), `operation` a subset of
+    `crud` in that order (`r`, `cru`, `crud`, …), `domain` empty or a record-rule domain. There is
+    no `ir.model.access.csv` and no `ir.rule` record on 20.0: a module that ships one does not load.
+  - **Up to 19.0**: `security/ir.model.access.csv`, header
+    `id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink`; record rules
+    as `ir.rule` records in XML.
 - Menus: a root `<menuitem>` for an application, actions as `ir.actions.act_window`. Use the
   view types of the series you are on (e.g. `<list>` since 18.0, not `<tree>`).
 - Use the series' own APIs; check an existing core module in `addons/` for the current idiom
