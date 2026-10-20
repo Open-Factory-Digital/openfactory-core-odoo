@@ -24,13 +24,28 @@ jobs:
         run: |
           set -eu
           d=$(mktemp -d) && mkdir -p "$d/custom_addons/x_bad"
-          printf "{'name': 'Bad', 'version': '19.0.1.0.0', 'license': 'LGPL-3'}\n" > "$d/custom_addons/x_bad/__manifest__.py"
+          printf "{'name': 'Bad', 'version': '20.0.1.0.0', 'license': 'LGPL-3'}\n" > "$d/custom_addons/x_bad/__manifest__.py"
           printf 'def broken(:\n' > "$d/custom_addons/x_bad/models.py"
           cd "$d"
           if printf 'custom_addons/x_bad/__manifest__.py\ncustom_addons/x_bad/models.py\n' \
-               | python "$GITHUB_WORKSPACE/lib/odoo_lint.py" 19.0; then
+               | python "$GITHUB_WORKSPACE/lib/odoo_lint.py" 20.0; then
             echo "lint should have failed"; exit 1
           fi
+      - name: lint helper knows each series' access file
+        run: |
+          set -eu
+          d=$(mktemp -d) && mkdir -p "$d/custom_addons/x_acl/security"
+          printf "{'name': 'Acl', 'version': '20.0.1.0.0', 'license': 'LGPL-3', 'author': 'x'}\n" > "$d/custom_addons/x_acl/__manifest__.py"
+          printf 'id,name,model_id,group_id/id,operation,domain\na,a,res.partner,base.group_user,crud,\n' > "$d/custom_addons/x_acl/security/ir.access.csv"
+          printf 'id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\n' > "$d/custom_addons/x_acl/security/ir.model.access.csv"
+          cd "$d"
+          printf 'custom_addons/x_acl/security/ir.access.csv\n' | python "$GITHUB_WORKSPACE/lib/odoo_lint.py" 20.0
+          for pair in "ir.model.access.csv 20.0" "ir.access.csv 19.0"; do
+            set -- $pair
+            if printf 'custom_addons/x_acl/security/%s\n' "$1" | python "$GITHUB_WORKSPACE/lib/odoo_lint.py" "$2"; then
+              echo "lint should refuse $1 on $2"; exit 1
+            fi
+          done
       - name: install --dry-run (local forge)
         run: ./install.sh --dir "$RUNNER_TEMP/of-odoo" --dry-run
       - name: install --dry-run (github forge)
