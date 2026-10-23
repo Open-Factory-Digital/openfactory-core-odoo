@@ -40,32 +40,37 @@ validate:
   test: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' test @PROJECT@"
   # Python/XML/CSV syntax, __manifest__.py shape, access rules for new models — changed files only.
   lint: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' lint @PROJECT@"
-  # Replaces the platform floor's whole-tree credential scan (the project's declaration wins):
-  # Odoo ships test keys and fixtures (base/tests/ssl, account_peppol, ...) that the floor's scan
-  # reports on every proof. This one scans the CHANGED files with the same kinds of patterns, and
-  # blocks — a credential this change adds is never debt to carry.
+  # Changed files only, and blocking. Declared here, it replaces the platform floor's whole-tree
+  # credential scan, which reports Odoo's own test keys and fixtures (base/tests/ssl, ...) on every
+  # proof — core #569: https://github.com/Open-Factory-Digital/openfactory-core/issues/569
   security: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' security @PROJECT@"
+  # The python preset's `type` role (`mypy .`, below), answered by the same static checks as
+  # `lint`: no type checker passes over Odoo's ORM, and this keeps the gate changed-files-only.
+  type: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' lint @PROJECT@"
 
 # One test id per line (`<addon>.tests.<file>.<Class>.<test>`), read statically from every addon
 # in the tree — no Odoo run. A drop in the count between the clean tree and the change is gated.
 test_inventory: "sh '@OF_ODOO_DIR@/lib/odoo-validate.sh' inventory @PROJECT@"
 
 # A change to the ORM/framework is never "normal": it stays human-gated whatever merge_policy says.
-# `stack: odoo` names no shipped preset ON PURPOSE: `stack: python` would add the python preset's
-# `mypy .` and `bandit -r .` over the whole Odoo tree, which no Odoo fork passes (measured: both
-# missing tools on the proof, and neither is a meaningful gate on 50k files of someone else's code).
+# `stack: python` because Odoo is Python and a component's stack must name a shipped preset
+# (conformance errors on any other name — core #1016:
+# https://github.com/Open-Factory-Digital/openfactory-core/issues/1016). The preset runs nothing
+# here: every role it carries (lint, security, type, test — core presets/python.yaml) is declared
+# repo-wide above, and repo-wide beats preset, so its whole-tree `mypy .` / `bandit -r .` never
+# run. A core upgrade that adds a role to that preset would need declaring here too.
 components:
   custom_addons:
     path: "custom_addons/**"
-    stack: odoo
+    stack: python
     risk: normal
   odoo_addons:
     path: "addons/**"
-    stack: odoo
+    stack: python
     risk: normal
   framework:
     path: "odoo/**"
-    stack: odoo
+    stack: python
     risk: high
 
 # The agent's Odoo house rules are the deployment's (OPENFACTORY_GUIDELINES_DIR =
