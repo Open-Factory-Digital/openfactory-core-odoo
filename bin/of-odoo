@@ -6,7 +6,7 @@
 #   of-odoo install|update MODULE[,MODULE] [-p P]     install / upgrade modules in the dev database
 #   of-odoo factory up|down|logs|status               the factory (engine, worker, panel), isolated
 #   of-odoo of ARGS...                                any `openfactory` command, isolated
-#   of-odoo doctor|prove [PROJECT]                    openfactory doctor / box prove
+#   of-odoo doctor|prove|conformance [PROJECT]        openfactory doctor / box prove / conformance
 #   of-odoo attach PATH|URL [--name N] [--base B] [--committed]
 #                                                     put an EXISTING Odoo fork on the factory floor
 #   of-odoo register NAME PATH [--base B] [--forge local|github] [--repo OWNER/NAME] [--committed]
@@ -260,7 +260,7 @@ cmd_attach() {
 
 sub=${1:-help}; [ $# -gt 0 ] && shift
 case $sub in
-    up|down|restart|logs|ps|odoo|install|update|doctor|prove|validate|build)
+    up|down|restart|logs|ps|odoo|install|update|doctor|prove|conformance|validate|build)
         parse_project "$@"; eval "set -- $_rest"
         of_load_project "${OF_ODOO_PROJECT:-}"
         case $sub in
@@ -275,6 +275,7 @@ case $sub in
             update) [ $# -ge 1 ] || of_die "update MODULE"; cmd_odoo "-u $1 --stop-after-init"; of_compose restart odoo ;;
             doctor) of_openfactory doctor "$OF_ODOO_PROJECT" ;;
             prove) of_openfactory box prove "$OF_ODOO_PROJECT" ;;
+            conformance) of_openfactory conformance "$OF_ODOO_PROJECT" ;;
             validate) sh "$OF_ODOO_DIR/lib/odoo-validate.sh" "${1:-test}" "$OF_ODOO_PROJECT" ;;
         esac
         ;;
@@ -289,8 +290,8 @@ case $sub in
             ( . "$f"; printf '%-16s %s @ %s (Odoo %s, :%s, %s)\n' "$(basename "$f" .env)" \
                 "$OF_ODOO_SRC" "$OF_ODOO_BASE" "$OF_ODOO_SERIES" "$OF_ODOO_HTTP_PORT" "$OF_ODOO_SRC_MODE" )
         done ;;
-    env) ( of_platform_env; for v in HOME TEMPORAL_ADDRESS TEMPORAL_UI_URL OPENFACTORY_PANEL_URL \
-            OPENFACTORY_GUIDELINES_DIR OPENFACTORY_LOG_DIR OF_ODOO_DIR PATH; do eval "printf \"export %s='%s'\\n\" $v \"\$$v\""; done ) ;;
+    env) ( of_platform_env; for v in $OF_PLATFORM_VARS; do
+               eval "_val=\${$v:-}"; [ -n "$_val" ] && printf "export %s='%s'\n" "$v" "$_val"; done; true ) ;;
     help|-h|--help) usage ;;
     *) usage >&2; exit 2 ;;
 esac
