@@ -12,7 +12,7 @@ It is also the shortest way to put the factory on an Odoo fork **you already hav
 ```
  install.sh ──► <dir>/core        openfactory-core, cloned at a release tag, in its own venv
             ──► <dir>/odoo        your Odoo fork: the forge the factory branches from and merges to
-            ──► <dir>/home        the factory's own HOME — registry, board, proofs (isolated)
+            ──► <dir>/home        the factory's state (registry, board, proofs...) and the HOME it runs with
             ──► <dir>/manifests   the operator-held project manifests (nothing committed to Odoo)
             ──► <dir>/guidelines  the Odoo house rules every agent pass reads
             ──► <dir>/bin/of-odoo the one command for all of it
@@ -78,11 +78,15 @@ a one-model module with one test took 56 s.
 
 ### The factory, isolated from any other
 
-openfactory-core keeps all operator state under `$HOME/.openfactory/` (`namespace.operator_path`)
-and always loads `~/.openfactory/env` (`cli.py`, `_HOST_ENV`); v0.6.0 still has no
-`OPENFACTORY_HOME`.
-So `of-odoo` runs every `openfactory` process with `HOME=<dir>/home`, and hands back only what the
-tools need from your real home: the agent's login (`<dir>/home/.claude` is a symlink to
+`of-odoo` runs every `openfactory` process in an environment that names each operator path
+core v0.6.0 has a variable for — `OPENFACTORY_REGISTRY`, `_BOARD_DB`, `_PROOFS`,
+`_APPROVERS_FILE`, `_RESUME_DIR`, `_REPO_CACHE`, `_METRICS_DB`, `_LOG_DIR`, `_WORK_DIR`,
+`_STATE_DIR` — under `<dir>/home/.openfactory/`, set explicitly and never inherited from your
+shell ([lib/common.sh](lib/common.sh), `of-odoo env` prints them). What has no variable — the
+deployment env `~/.openfactory/env`, `factory up`'s own state beside it, the local forge's context
+repositories — still follows `HOME`, so `HOME=<dir>/home` stays, for those alone
+([core #1015](https://github.com/Open-Factory-Digital/openfactory-core/issues/1015)). Only what the
+tools need comes back from your real home: the agent's login (`<dir>/home/.claude` is a symlink to
 `~/.claude`), your git identity (copied into `<dir>/home/.gitconfig`), `DOCKER_CONFIG` and
 `GH_CONFIG_DIR`. Sharing `~/.claude` shares the login and nothing else the agent would act with:
 since v0.6.0 core starts every agent role with no MCP servers (`--strict-mcp-config`), so your
@@ -119,12 +123,13 @@ reader — so nothing is committed to the fork. It declares:
 | `setup` | Docker answers, the dev image exists, Postgres is up |
 | `validate.test` | **Odoo tests of only the addons this change touches**: the diff against the merge-base (committed or not, untracked included) is mapped to addon directories (the nearest `__manifest__.py`, so `custom_addons/`, `addons/`, `odoo/addons/` all work); those modules are installed into a throwaway database with `--test-enable --test-tags /<module>,… --stop-after-init`, in the dev image, against the project's Postgres, and the database is dropped. Code outside any addon also runs `base` (override: `OF_ODOO_FRAMEWORK_TESTS`). Fails on a non-zero exit, a failing test, or any `ERROR`/`CRITICAL` log line. |
 | `validate.lint` | changed files only: Python compiles, XML parses, CSV reads, `__manifest__.py` is a literal dict with a `name`, the series' access file is the one it reads (`security/ir.access.csv` from 20.0, `ir.model.access.csv` before) with its header and, on 20.0, a valid `operation`; warnings for a version not `20.0.x.y.z`, a missing `license` (or, on 20.0, `author`), a new model without access rules |
-| `validate.security` | a credential added by the change (changed files only). It replaces the platform floor's whole-tree scan, which reports Odoo's own test keys on every run. |
+| `validate.security` | a credential added by the change (changed files only, blocking). Declaring it replaces the floor's whole-tree scan, which reports Odoo's own test keys ([core #569](https://github.com/Open-Factory-Digital/openfactory-core/issues/569)). |
+| `validate.type` | the same static checks as `lint` — declared so the `python` preset's `mypy .` never runs (see `components`) |
 | `test_inventory` | every `test_*` method of every addon's `tests/`, read statically (18,230 ids on 20.0, 6 s), one id per line — so a change that deletes tests is gated |
 | `merge_policy` / `review_mode` | `human` / `advisory` |
 | `knowledge_map` / `okf_gate` | off — a module map of ~600 addons buys little while work lives in a few custom modules; turn on when you want it |
 | `max_cost_usd`, `max_diff_lines` | 5.0 (per-token billing only) and 1500 |
-| `components` | `custom_addons/**`, `addons/**` normal; `odoo/**` (the framework) high-risk. `stack: odoo` names no preset on purpose: the `python` preset would add `mypy .` and `bandit -r .` over all of Odoo. |
+| `components` | `custom_addons/**`, `addons/**` normal; `odoo/**` (the framework) high-risk; all `stack: python`. A stack must name a shipped preset or `openfactory conformance` reports an error ([core #1016](https://github.com/Open-Factory-Digital/openfactory-core/issues/1016)), so they name `python` and every role of that preset (`lint`, `security`, `type`, `test`) is declared repo-wide, which wins: the preset's whole-tree `mypy .`/`bandit -r .` never run. `of-odoo conformance` reports no errors. |
 
 The agent's Odoo conventions — new modules in `custom_addons/`, never patch core modules unless the
 card says so, `20.0.x.y.z` versions, access rules for every model (`security/ir.access.csv` on
@@ -165,7 +170,7 @@ starts the project's Postgres and leaves it running for the next job; `of-odoo d
 | `of-odoo install \| update MODULE [-p P]` | install / upgrade modules in the dev database, then restart |
 | `of-odoo odoo [-p P] ARGS…` | any `odoo-bin` invocation against the dev database |
 | `of-odoo factory up \| fg \| down \| status \| logs` | the factory (engine, worker, panel), in the background or foreground |
-| `of-odoo doctor \| prove [-p P]` | `openfactory doctor` / `openfactory box prove` |
+| `of-odoo doctor \| prove \| conformance [-p P]` | `openfactory doctor` / `box prove` / `conformance` |
 | `of-odoo validate test\|lint\|security\|setup\|inventory [-p P]` | a gate by hand, from a checkout or worktree of the fork |
 | `of-odoo attach PATH\|URL [--name N] [--base B] [--committed]` | put an existing fork on the floor — [docs/attach.md](docs/attach.md) |
 | `of-odoo projects`, `of-odoo env`, `of-odoo of ARGS…` | what is registered, the isolated environment, any `openfactory` command |
@@ -177,9 +182,9 @@ starts the project's Postgres and leaves it running for the next job; `of-odoo d
   branch; this dev stack instead runs Odoo from a mounted or synced checkout and lives outside the
   fork. Wiring it means committing a compose file whose Odoo image `COPY`s the tree — possible,
   but a 1.4 GB build context per preview. Until then: merge, `of-odoo restart`, look.
-- **`openfactory explain`** (new in v0.6.0) reads only a manifest committed at
-  `.openfactory/project.yaml`, so on the default operator-held manifest it reports none. It works
-  on a project attached with `--committed`.
+- **`openfactory explain`** ignores an operator-held `manifest_path`, and `doctor` names
+  `.openfactory/project.yaml` regardless ([core #1018](https://github.com/Open-Factory-Digital/openfactory-core/issues/1018));
+  both read the real manifest on a project attached with `--committed`.
 - **Odoo Enterprise** is out of scope: it is not open source and is not fetched.
 - The dev database is for development. Nothing here is a production deployment of Odoo.
 

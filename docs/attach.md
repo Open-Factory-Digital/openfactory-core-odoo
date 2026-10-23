@@ -24,10 +24,10 @@ The Odoo series is read from `odoo/release.py`, so the dev image (`FROM odoo:<se
 manifest's version convention match the fork. `--base` defaults to the checkout's current branch.
 
 **One thing is written beside your checkout:** core's worktree box keeps each job's worktree in
-`<parent of the checkout>/.openfactory-worktrees/` (`factory.py`; still not configurable in
-v0.6.0) — for `~/src/acme-odoo` that is `~/src/.openfactory-worktrees/` — and removes it when the
-job ends. Job journals go inside the install (`OPENFACTORY_LOG_DIR`, set by
-`of-odoo`).
+`<parent of the checkout>/.openfactory-worktrees/` — for `~/src/acme-odoo` that is
+`~/src/.openfactory-worktrees/` — and removes it when the job ends. Not configurable in v0.6.0
+([core #790](https://github.com/Open-Factory-Digital/openfactory-core/issues/790)). Everything
+else the factory keeps is inside the install (`of-odoo env` lists the paths).
 
 ## Nothing has to be committed to your fork
 
