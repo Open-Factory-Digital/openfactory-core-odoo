@@ -25,28 +25,54 @@ of_load_project() {
     OF_ODOO_PROJECT=$_p
 }
 
-# THE ISOLATION. openfactory-core keeps every piece of operator state under `$HOME/.openfactory`
-# (`namespace.operator_path`) and always loads `~/.openfactory/env` (cli.py `_HOST_ENV`); there is
-# no OPENFACTORY_HOME. So this install runs the platform with HOME pointed at its own directory,
-# and hands back exactly the pieces of the real HOME the tools need: the coding agent's login
-# (a symlink, made by install.sh), git identity, Docker and gh configuration.
+# THE ISOLATION, declared. Every operator path openfactory-core v0.6.0 lets a variable name is
+# named here, unconditionally — inside the install, never inherited from the caller's shell (where
+# another factory's OPENFACTORY_REGISTRY may be exported). The values are the ones `openfactory
+# init` writes into the deployment env, so nothing moves; set here, they win over that file
+# (load_dotenv never overrides a set variable) and over core's defaults (/var/lib, /tmp, cwd).
+#
+# HOME=<install>/home is kept ONLY for what has no override in v0.6.0 (core #1015,
+# https://github.com/Open-Factory-Digital/openfactory-core/issues/1015): the deployment env itself
+# (cli.py `_HOST_ENV` = ~/.openfactory/env), `factory up`'s own state beside it (engine data, pids),
+# the local forge's context repositories (`namespace.operator_path("context/…")`), and the coding
+# agent's HOME-relative state. So HOME still points at the install, and only what the tools need
+# of the real HOME is handed back: the agent's login (a symlink, made by install.sh), git
+# identity, Docker and gh configuration.
 of_platform_env() {
     _real=${OF_ODOO_REAL_HOME:-$HOME}
     export OF_ODOO_REAL_HOME="$_real"
     export HOME="$OF_ODOO_DIR/home"
     if [ -d "$_real/.docker" ] && [ -z "${DOCKER_CONFIG:-}" ]; then export DOCKER_CONFIG="$_real/.docker"; fi
     if [ -d "$_real/.config/gh" ] && [ -z "${GH_CONFIG_DIR:-}" ]; then export GH_CONFIG_DIR="$_real/.config/gh"; fi
-    # Explicit beats every file core reads (load_dotenv never overrides a set variable).
+    _st="$OF_ODOO_DIR/home/.openfactory"
+    export OPENFACTORY_REGISTRY="$_st/registry.yaml"         # registry.py (gate_seal's key sits beside it)
+    export OPENFACTORY_BOARD_DB="$_st/board.db"              # adapters/board_db.py
+    export OPENFACTORY_PROOFS="$_st/proofs"                  # box_prove.py — `box prove` writes, `doctor` reads
+    export OPENFACTORY_APPROVERS_FILE="$_st/approvers.json"  # approvals.py
+    export OPENFACTORY_RESUME_DIR="$_st/resume"              # adapters/agent/session_store.py (else /var/lib)
+    export OPENFACTORY_REPO_CACHE="$_st/repos"               # runtime/repo_cache.py (else /tmp, shared)
+    export OPENFACTORY_METRICS_SINK=sqlite                   # the factory's messages land somewhere
+    export OPENFACTORY_METRICS_DB="$_st/metrics.db"          # observability/registry.py (else ./ of the cwd)
+    export OPENFACTORY_LOG_DIR="$_st/logs"                   # job journals (else beside each fork's checkout)
+    export OPENFACTORY_WORK_DIR="$_st/work"                  # container box / preview clones (else /tmp)
+    export OPENFACTORY_STATE_DIR="$_st/state"                # namespace.py build stamps (else /var/lib)
+    # The listeners on this install's ports, and its guidelines.
     export TEMPORAL_ADDRESS="127.0.0.1:$OF_TEMPORAL_PORT"
     export TEMPORAL_UI_URL="http://127.0.0.1:$OF_TEMPORAL_UI_PORT"
     export OPENFACTORY_PANEL_URL="http://127.0.0.1:$OF_PANEL_PORT"
     export OPENFACTORY_GUIDELINES_DIR="$OF_ODOO_DIR/guidelines"
-    # job journals inside the install, not beside each fork's checkout (core's unset default)
-    export OPENFACTORY_LOG_DIR="${OPENFACTORY_LOG_DIR:-$OF_ODOO_DIR/home/.openfactory/logs}"
     export OF_ODOO_DIR
     PATH="$OF_ODOO_DIR/core/.venv/bin:$OF_ODOO_DIR/bin:$PATH"
     export PATH
 }
+
+# Every variable of_platform_env sets — `of-odoo env` prints them.
+# shellcheck disable=SC2034  # read by bin/of-odoo
+OF_PLATFORM_VARS="HOME DOCKER_CONFIG GH_CONFIG_DIR OPENFACTORY_REGISTRY OPENFACTORY_BOARD_DB
+ OPENFACTORY_PROOFS OPENFACTORY_APPROVERS_FILE OPENFACTORY_RESUME_DIR OPENFACTORY_REPO_CACHE
+ OPENFACTORY_METRICS_SINK OPENFACTORY_METRICS_DB OPENFACTORY_LOG_DIR OPENFACTORY_WORK_DIR
+ OPENFACTORY_STATE_DIR TEMPORAL_ADDRESS TEMPORAL_UI_URL OPENFACTORY_PANEL_URL
+ OPENFACTORY_GUIDELINES_DIR OF_ODOO_DIR PATH"
 
 of_openfactory() {
     ( of_platform_env && cd "$OF_ODOO_DIR" && exec openfactory "$@" )
